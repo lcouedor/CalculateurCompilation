@@ -1,0 +1,121 @@
+import java_cup.runtime.*;
+import java.io.*; 
+import java.util.HashMap;
+
+parser code {:
+   public static void main(String args[]) throws Exception {
+      new parser(new Yylex(new InputStreamReader(System.in))).parse();
+   }
+
+   public void variable_error(String name) {
+      System.out.println("erreur: identificateur inconnu : " + name);
+   }
+
+   public void erreur_affect(){
+      System.out.println("erreur: type incorrect sur l'affectation");
+   }
+
+   public void ope_error(String token) { 
+		System.err.println("erreur: type incorrect sur opérateur "+token);
+	}
+
+:}
+
+action code {:
+   //use hashmap pour stocker les variables
+   HashMap<String, Integer> variablesInt = new HashMap<String, Integer>();
+   HashMap<String, String> variablesStr = new HashMap<String, String>();
+
+   //méthode pour afficher le contenu de variablesInt et variablesStr
+   public void afficherVariables(){
+      if(!variablesStr.isEmpty()){
+         System.out.println("Variables chaines :");
+            for (String key : variablesStr.keySet()) {
+               System.out.println("\t"+key + " : " + variablesStr.get(key));
+            }
+      }else{
+         System.out.println("Aucune variable chaine");
+      }
+      
+      if(!variablesInt.isEmpty()){
+         System.out.println("Variables entières :");
+         for (String key : variablesInt.keySet()) {
+            System.out.println("\t"+key + " : " + variablesInt.get(key));
+         }
+      }else{
+         System.out.println("Aucune variable entier");
+      }
+      
+   }
+
+   public void initNom(){
+      nomVar = "-";
+   }
+
+   //"mode d'erreur" du programme
+   boolean aff = true;
+
+   //nom de la variable en cours (tiret par défaut)
+   String nomVar = "-";
+
+:}
+
+terminal SOMME, MULT, PAROUVRE, PARFERME, EGAL, PRINT, EOL;
+terminal Integer ENTIER;
+terminal String CHAINE;
+terminal String VARIABLECHIFFRE, VARIABLECHAINE;
+non terminal Integer intExpr;
+non terminal String strExpr;
+non terminal prog;
+//à rendre fichier qui contient toute la grammaire
+
+precedence left SOMME;
+precedence left MULT;
+
+prog ::= intExpr:v 
+      {: if(aff)System.out.println(nomVar+" : entier "+v); aff=true; initNom(); :} EOL prog //si aff == true, affichage, puis on passe aff à true pour les expressions suivantes
+      | strExpr:v 
+      {: if(aff)System.out.println(nomVar+" : chaine "+v); aff=true; initNom(); :} EOL prog
+      | EOL prog
+      | PRINT 
+      {: afficherVariables(); :} EOL prog
+      | {: System.out.println("Au revoir"); :};
+
+strExpr ::= strExpr:v1 SOMME strExpr:v2 
+         {: RESULT = v1.replaceAll("\"","") + v2.replaceAll("\"",""); :}
+         | strExpr SOMME intExpr
+         {: if(aff)parser.ope_error("+"); aff = false; :} //erreur addition chaine et entier
+         | intExpr SOMME strExpr
+         {: if(aff)parser.ope_error("+"); aff = false; :} //erreur addition entier et chaine
+         | strExpr:v1 MULT intExpr:v2 
+         {: v1 = v1.replaceAll("\"",""); RESULT = '"'+v1.repeat(v2)+'"'; :}
+         | intExpr:v1 MULT strExpr:v2
+         {: v2 = v2.replaceAll("\"",""); RESULT = '"'+v2.repeat(v1)+'"'; :}
+         | PAROUVRE strExpr:v PARFERME 
+         {: RESULT = v; :}
+         | VARIABLECHAINE:v1 EGAL strExpr:v2 
+         {: nomVar = v1; RESULT = v2; variablesStr.put(v1,v2); :}
+         | CHAINE:e 
+         {: RESULT = e; :}
+         | VARIABLECHAINE EGAL intExpr 
+         {: if(aff)parser.erreur_affect(); aff = false; :}
+         | strExpr MULT strExpr 
+         {: if(aff)parser.ope_error("*"); aff = false; :} //erreur multiplication de deux chaines
+         | VARIABLECHAINE:v
+         {: RESULT = variablesStr.get(v); if(RESULT == null){if(aff)parser.variable_error(v); aff=false; RESULT="-";} :};
+
+intExpr ::= intExpr:v1 SOMME intExpr:v2 
+         {: RESULT = v1+v2; :}
+         | intExpr:v1 MULT intExpr:v2 
+         {: RESULT = v1*v2; :}
+         | PAROUVRE intExpr:v PARFERME 
+         {: RESULT = v; :}
+         | VARIABLECHIFFRE:v1 EGAL intExpr:v2 
+         {: nomVar = v1; RESULT = v2; if(aff)variablesInt.put(v1,v2); :} //si aff false, variable n'existe pas, on ne la stock pas
+         | ENTIER:e 
+         {: RESULT = e; :}
+         | VARIABLECHIFFRE EGAL strExpr 
+         {: if(aff)parser.erreur_affect(); aff = false; :}
+         | VARIABLECHIFFRE:v 
+         //variable non existante : on affiche l'erreur, on met aff à false, on met le result à 0
+         {: RESULT = variablesInt.get(v); if(RESULT == null){if(aff)parser.variable_error(v); aff=false; RESULT=0;} :};
